@@ -68,19 +68,7 @@ DNS=114.114.114.114 223.5.5.5
 | `Cache=no-negative` | 只缓存成功结果（推荐高并发场景） |
 | `DNS=` | 上游 DNS，不写则用 DHCP 下发的 DNS |
 
-### 4. 配置 nsswitch.conf（可选但推荐）
-
-```bash
-sudo nano /etc/nsswitch.conf
-```
-
-确保 `hosts` 行中 `resolve` 在 `files` 之后、`dns` 之前：
-
-```
-hosts: files mymachines resolve [!UNAVAIL=return] dns myhostname
-```
-
-### 5. 重启服务并验证
+### 4. 重启服务并验证
 
 ```bash
 sudo systemctl restart systemd-resolved
@@ -88,7 +76,7 @@ sudo systemctl status systemd-resolved
 resolvectl status
 ```
 
-### 6. 验证缓存是否生效
+### 5. 验证缓存是否生效
 
 ```bash
 # 查看缓存统计
@@ -113,7 +101,7 @@ Cache
          Cache Hit Rate: 14.3%
 ```
 
-### 7. 确认重启后持久化
+### 6. 确认重启后持久化
 
 - `systemd-resolved` 默认开机自启
 - 软链接 `/etc/resolv.conf` 重启后依然存在
