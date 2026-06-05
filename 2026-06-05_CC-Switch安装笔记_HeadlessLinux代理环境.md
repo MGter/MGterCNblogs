@@ -2,6 +2,7 @@
 
 > **CC-Switch 是什么**：AI CLI 工具的 provider/proxy 管理器——切换 AI 后端 provider、管理本地多应用代理路由。
 > **部署场景**：内网无图形界面的 Linux 服务器，需通过 HTTP 代理访问 GitHub。
+> **⚠️ 实测补充**：装完 Web 界面看不到 cost/usage 是常见问题，见第七节。
 
 ---
 
@@ -141,4 +142,88 @@ cc-switch interactive             # 交互式 TUI 界面
 
 ---
 
-*整理于 2026-06-05，原文为 CC-Switch 官方 install 文档*
+## 七、常见问题：装好了但看不到 cost/usage
+
+> 最常见 bug，涉及 3 个层面，按顺序排查。
+
+### 问题 1：数据库 schema 不匹配
+
+**症状**：`config show` / `proxy show` 报错 `table proxy_config has no column named circuit_success_threshold`
+
+**原因**：CC-Switch 二进制升了级（v5.7.0），但数据库还是旧版（v3.16.1），新增字段不存在。
+
+**修复：**
+
+```bash
+# 备份旧数据库
+cp ~/.cc-switch/cc-switch.db ~/.cc-switch/cc-switch.db.bak
+
+# 删库重建（配置会丢失，需重新设置）
+rm ~/.cc-switch/cc-switch.db
+
+# 验证
+~/.local/bin/cc-switch config show
+# 不再报错 → schema 已重建
+```
+
+也可尝试 `cc-switch update` 后自动迁移，无效就删库重建。
+
+### 问题 2：Daemon 没运行
+
+**症状**：`cc-switch daemon status` 返回 `daemon not reachable`
+
+**原因**：Web server 只负责展示界面，daemon 才是真正拦截 API 流量、记录 cost/usage 的组件。
+
+**修复：**
+
+```bash
+~/.local/bin/cc-switch daemon start
+
+# 验证
+~/.local/bin/cc-switch daemon status
+# 期望输出: daemon running
+```
+
+### 问题 3：Claude Code 流量绕过了 CC-Switch
+
+**症状**：daemon 和 Web server 都正常，但 cost/usage 始终为零。
+
+**原因**：`~/.claude/settings.json` 中 `ANTHROPIC_BASE_URL` 直接指向 provider API（如 `https://api.deepseek.com/anthropic`），没走 CC-Switch。
+
+**修复：**
+
+```bash
+# 查看当前配置
+cat ~/.claude/settings.json | grep ANTHROPIC_BASE_URL
+
+# 改为走 cc-switch 代理（daemon 默认监听 127.0.0.1:8080）
+# settings.json 中改为：
+# "ANTHROPIC_BASE_URL": "http://127.0.0.1:8080/anthropic"
+```
+
+**链路**：Claude Code → `127.0.0.1:8080`（cc-switch daemon）→ 实际 provider API，daemon 在此过程中记录每条请求的 cost。
+
+---
+
+### 快速诊断命令
+
+```bash
+# 1. 版本一致性
+~/.local/bin/cc-switch --version
+
+# 2. 数据库健康
+~/.local/bin/cc-switch config show 2>&1
+
+# 3. daemon 状态
+~/.local/bin/cc-switch daemon status 2>&1
+
+# 4. 流量走向
+cat ~/.claude/settings.json | grep -i "base_url"
+
+# 5. Web server 状态
+ss -tlnp | grep 18888
+```
+
+---
+
+*整理于 2026-06-05，原文为 CC-Switch 官方 install 文档 + 实机 bug 排查经验*
